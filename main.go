@@ -4,22 +4,22 @@ import (
 	"fmt"
 	"log"
 
-	"natneam.github.io/dfs-core/p2p"
+	"natneam.github.io/dfs-core/network"
 )
 
-func OnPeer(peer p2p.Peer) error {
+func OnPeer(peer network.Peer) error {
 	// Do something with the peer
 	return nil
 }
 
 func main() {
-	opts := p2p.TCPTransporterOpts{
+	opts := network.TCPTransporterOpts{
 		ListenAddress: ":3000",
-		HandshakeFunc: p2p.NOPHandshakeFunc,
-		Decoder:       p2p.DefaultDecoder{},
+		HandshakeFunc: network.NOPHandshakeFunc,
+		Decoder:       network.DefaultDecoder{},
 		OnPeer:        OnPeer,
 	}
-	tr := p2p.NewTCPTransporter(opts)
+	tr := network.NewTCPTransporter(opts)
 
 	go func() {
 		for {

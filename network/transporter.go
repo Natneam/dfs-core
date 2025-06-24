@@ -1,4 +1,4 @@
-package p2p
+package network
 
 // Peer is a representation of a node in the fs network
 type Peer interface {
