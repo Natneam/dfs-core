@@ -1,8 +1,10 @@
 package network
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 )
 
@@ -23,6 +25,10 @@ func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 
 func (t *TCPPeer) Close() error {
 	return t.conn.Close()
+}
+
+func (t *TCPPeer) RemoteAddr() net.Addr {
+	return t.conn.RemoteAddr()
 }
 
 type TCPTransporterOpts struct {
@@ -46,6 +52,17 @@ func NewTCPTransporter(opts TCPTransporterOpts) *TCPTransporter {
 
 }
 
+func (t *TCPTransporter) Dial(addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	go t.handleConn(conn, true)
+
+	return nil
+}
+
 // Consume returns read only channel which will be used to read
 // messages from another peer node.
 func (t *TCPTransporter) Consume() <-chan Message {
@@ -62,23 +79,34 @@ func (t *TCPTransporter) ListenAndAccept() error {
 
 	go t.ListenAndAcceptLoop()
 
+	log.Printf("TCP Transport listening on port %s", t.ListenAddress)
+
 	return nil
+}
+
+func (t *TCPTransporter) Close() error {
+	return t.listener.Close()
 }
 
 func (t *TCPTransporter) ListenAndAcceptLoop() {
 
 	for {
 		conn, err := t.listener.Accept()
+
+		if errors.Is(err, net.ErrClosed) {
+			return
+		}
+
 		if err != nil {
 			fmt.Printf("TCP Accept Error : %s", err)
 		}
 
-		go t.handleConn(conn)
+		go t.handleConn(conn, false)
 	}
 
 }
 
-func (t *TCPTransporter) handleConn(conn net.Conn) {
+func (t *TCPTransporter) handleConn(conn net.Conn, outbound bool) {
 	var err error
 
 	defer func() {
@@ -86,8 +114,7 @@ func (t *TCPTransporter) handleConn(conn net.Conn) {
 		conn.Close()
 	}()
 
-	peer := NewTCPPeer(conn, true)
-	fmt.Printf("New Incoming connection %+v \n", peer)
+	peer := NewTCPPeer(conn, outbound)
 
 	if err = t.HandshakeFunc(peer); err != nil {
 		return
