@@ -11,7 +11,7 @@ type Decoder interface {
 type DefaultDecoder struct{}
 
 func (dec DefaultDecoder) Decode(reader io.Reader, msg *Message) error {
-	buffer := make([]byte, 1028)
+	buffer := make([]byte, 134)
 	n, err := reader.Read(buffer)
 
 	if err != nil {

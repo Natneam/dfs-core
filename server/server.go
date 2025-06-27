@@ -89,11 +89,11 @@ func (s *FileServer) StoreData(key string, r io.Reader) error {
 	peers := []io.Writer{}
 
 	for _, peer := range s.peers {
+		peer.Send(msgBuf.Bytes())
 		peers = append(peers, peer)
 	}
 
 	mw := io.MultiWriter(peers...)
-	mw.Write(msgBuf.Bytes())
 
 	if _, err = io.Copy(mw, fileBuf); err != nil {
 		return fmt.Errorf("failed to send file content to peers: %w", err)
@@ -122,32 +122,32 @@ func (s *FileServer) loop() {
 		select {
 		case rpc := <-s.Transporter.Consume():
 			var msg DataMessage
-			payload := bytes.NewReader(rpc.Payload)
-			if err := gob.NewDecoder(payload).Decode(&msg); err != nil {
+			if err := gob.NewDecoder(bytes.NewReader(rpc.Payload)).Decode(&msg); err != nil {
 				log.Fatal(err)
 			}
-			s.handleMessage(rpc.From.String(), msg, payload)
+			s.handleMessage(rpc.From.String(), &msg)
 		case <-s.quitchan:
 			return
 		}
 	}
 }
 
-func (s *FileServer) handleMessage(from string, msg DataMessage, r io.Reader) error {
+func (s *FileServer) handleMessage(from string, msg *DataMessage) error {
 	switch v := msg.Payload.(type) {
 	case *StoreMessagePayload:
 		fmt.Printf("Store message received %+v\n", v)
+
 		peer, ok := s.peers[from]
 		if !ok {
 			return fmt.Errorf("peer (%s) could not be found in the peer list", from)
 		}
-		fmt.Printf("%+v\n", s.peers)
 
-		_, err := s.Store.Write(v.Key, io.LimitReader(r, v.Size))
+		_, err := s.Store.Write(v.Key, io.LimitReader(peer, v.Size))
 		if err != nil {
 			return err
 		}
 		peer.CloseStream()
+		fmt.Printf("Data received and stored to disk %+v\n", v)
 	}
 	return nil
 }
