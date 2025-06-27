@@ -1,11 +1,15 @@
 package network
 
-import "net"
+import (
+	"net"
+)
 
 // Peer is a representation of a node in the fs network
 type Peer interface {
-	Close() error
+	net.Conn
 	RemoteAddr() net.Addr
+	Send([]byte) error
+	CloseStream()
 }
 
 // Transporter handles the communication between nodes in the network.

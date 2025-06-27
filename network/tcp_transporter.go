@@ -3,32 +3,37 @@ package network
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
+	"sync"
 )
 
 type TCPPeer struct {
-	conn net.Conn
+	// Under lying connection object
+	net.Conn
 
 	// outbound = false, if we're accept a connection request
 	// outbound = true, if we're dialing a connection request
 	outbound bool
+
+	wg *sync.WaitGroup
 }
 
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	return &TCPPeer{
-		conn:     conn,
+		Conn:     conn,
 		outbound: outbound,
+		wg:       &sync.WaitGroup{},
 	}
 }
 
-func (t *TCPPeer) Close() error {
-	return t.conn.Close()
+func (t *TCPPeer) Send(data []byte) error {
+	_, err := t.Conn.Write(data)
+	return err
 }
 
-func (t *TCPPeer) RemoteAddr() net.Addr {
-	return t.conn.RemoteAddr()
+func (p *TCPPeer) CloseStream() {
+	p.wg.Done()
 }
 
 type TCPTransporterOpts struct {
@@ -128,19 +133,16 @@ func (t *TCPTransporter) handleConn(conn net.Conn, outbound bool) {
 	msg := Message{}
 	for {
 		if err = t.Decoder.Decode(conn, &msg); err != nil {
-			// Handle EOF error gracefully
-			if err == io.EOF {
-				fmt.Printf("EOF : %s\n", err)
-				return
-			}
 
 			fmt.Printf("TCP Decoding Error : %s\n", err)
 			continue
 		}
 
 		msg.From = conn.RemoteAddr()
-
-		// Feed the message to chan
+		peer.wg.Add(1)
+		fmt.Printf("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
 		t.msgChan <- msg
+		peer.wg.Wait()
+		fmt.Printf("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
 	}
 }

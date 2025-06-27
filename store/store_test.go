@@ -25,7 +25,7 @@ func TestWrite(t *testing.T) {
 	for i := range 50 {
 		key := fmt.Sprintf("test%d", i)
 
-		if err := s.Write(key, bytes.NewReader([]byte("Hello World"))); err != nil {
+		if _, err := s.Write(key, bytes.NewReader([]byte("Hello World"))); err != nil {
 			t.Error(err)
 		}
 
@@ -42,7 +42,7 @@ func TestRead(t *testing.T) {
 	for i := range 50 {
 		key := fmt.Sprintf("test%d", i)
 
-		if err := s.Write(key, bytes.NewReader([]byte("Hello World"))); err != nil {
+		if _, err := s.Write(key, bytes.NewReader([]byte("Hello World"))); err != nil {
 			t.Error(err)
 		}
 
@@ -62,7 +62,7 @@ func TestDelete(t *testing.T) {
 	for i := range 50 {
 		key := fmt.Sprintf("test%d", i)
 
-		if err := s.Write(key, bytes.NewReader([]byte("Hello World"))); err != nil {
+		if _, err := s.Write(key, bytes.NewReader([]byte("Hello World"))); err != nil {
 			t.Error()
 		}
 
