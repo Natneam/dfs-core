@@ -2,7 +2,9 @@ package server
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -64,6 +66,37 @@ func (s *FileServer) Stop() {
 	close(s.quitchan)
 }
 
+func (s *FileServer) Get(key string) (int64, io.Reader, error) {
+	if s.store.Has(key) {
+		println("serving from local file")
+		return s.store.Read(key)
+	}
+
+	println("File not found locally searching it on the network!")
+	msg := network.DataMessage{
+		Payload: network.GetMessagePayload{
+			Key: key,
+		},
+	}
+
+	if err := s.broadcast(msg); err != nil {
+		return 0, nil, err
+	}
+
+	time.Sleep(time.Millisecond * 500)
+
+	for _, peer := range s.peers {
+		var fileSize int64
+		binary.Read(peer, binary.LittleEndian, &fileSize)
+		n, err := s.store.Write(key, io.LimitReader(peer, fileSize))
+		if err != nil {
+			return 0, nil, err
+		}
+		fmt.Printf("received (%d) data over the network from %s\n", n, peer.LocalAddr())
+		peer.CloseStream()
+	}
+	return s.store.Read(key)
+}
 func (s *FileServer) Store(key string, r io.Reader) error {
 	fileBuf := new(bytes.Buffer)
 	tee := io.TeeReader(r, fileBuf)
@@ -165,7 +198,7 @@ func (s *FileServer) handleMessage(from string, msg *network.DataMessage) error 
 	case network.StoreMessagePayload:
 		return s.handleMessageStore(from, v)
 	case network.GetMessagePayload:
-		fmt.Printf("Get message received %+v\n", v)
+		return s.handleMessageGet(from, v)
 	}
 	return nil
 }
@@ -186,6 +219,36 @@ func (s *FileServer) handleMessageStore(from string, msg network.StoreMessagePay
 	fmt.Printf("Data received and stored to disk %+v\n", msg)
 	peer.CloseStream()
 
+	return nil
+}
+
+func (s *FileServer) handleMessageGet(from string, msg network.GetMessagePayload) error {
+	if !s.store.Has(msg.Key) {
+		return errors.New("requsted to stream file but I don't have it")
+	}
+
+	peer, ok := s.peers[from]
+	if !ok {
+		return fmt.Errorf("peer (%s) could not be found in the peer list", from)
+	}
+
+	fileSize, file, err := s.store.Read(msg.Key)
+	if err != nil {
+		return err
+	}
+
+	if rc, ok := file.(io.ReadCloser); ok {
+		println("closing read closer")
+		defer rc.Close()
+	}
+
+	peer.Send([]byte{network.IncomingStream})
+	binary.Write(peer, binary.LittleEndian, fileSize)
+	if _, err := io.Copy(peer, file); err != nil {
+		return err
+	}
+
+	println("wrote data to peer")
 	return nil
 }
 

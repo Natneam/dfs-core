@@ -57,7 +57,7 @@ func (s *Store) Write(key string, r io.Reader) (int64, error) {
 	return s.writeStream(key, r)
 }
 
-func (s *Store) Read(key string) (io.Reader, error) {
+func (s *Store) Read(key string) (int64, io.Reader, error) {
 	return s.readStream(key)
 }
 
@@ -109,17 +109,21 @@ func (s *Store) writeStream(key string, r io.Reader) (int64, error) {
 	return n, nil
 }
 
-func (s *Store) readStream(key string) (io.ReadCloser, error) {
+func (s *Store) readStream(key string) (int64, io.ReadCloser, error) {
 	pathName := s.PathTransformFunc(key)
 	fullPathWithRoot := fmt.Sprintf("%s/%s", s.Root, pathName.FullPath())
 
-	f, err := os.Open(fullPathWithRoot)
-
+	file, err := os.Open(fullPathWithRoot)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
-	return f, nil
+	fi, err := file.Stat()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return fi.Size(), file, nil
 }
 
 func DefaultPathTransformFunc(key string) PathKey {

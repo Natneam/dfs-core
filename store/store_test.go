@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,7 +47,12 @@ func TestRead(t *testing.T) {
 			t.Error(err)
 		}
 
-		data, err := s.Read(key)
+		_, r, err := s.Read(key)
+		if err != nil {
+			t.Error()
+		}
+
+		data, err := io.ReadAll(r)
 		if err != nil {
 			t.Error()
 		}
