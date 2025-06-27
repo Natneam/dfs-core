@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"time"
 
@@ -44,7 +45,17 @@ func main() {
 	go s2.Start()
 	time.Sleep(time.Second * 2)
 
-	data := bytes.NewReader([]byte("Hello this is a large data"))
-	s2.StoreData("mykey", data)
+	for i := range 10 {
+		data := bytes.NewReader([]byte("Hello this is a large data"))
+		s2.Store(fmt.Sprintf("%s_%d", "mykey", i), data)
+		time.Sleep(time.Microsecond * 100)
+	}
+
+	// r, err := s2.Get("mykey")
+	// if err != nil {
+	// 	log.Fatal("data not found")
+	// }
+	// b, _ := io.ReadAll(r)
+	// println(string(b))
 	select {}
 }

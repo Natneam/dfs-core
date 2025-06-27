@@ -52,7 +52,7 @@ type TCPTransporter struct {
 func NewTCPTransporter(opts TCPTransporterOpts) *TCPTransporter {
 	return &TCPTransporter{
 		TCPTransporterOpts: opts,
-		msgChan:            make(chan Message),
+		msgChan:            make(chan Message, 1024),
 	}
 
 }
@@ -129,9 +129,9 @@ func (t *TCPTransporter) handleConn(conn net.Conn, outbound bool) {
 		return
 	}
 
-	// Read from the peer
-	msg := Message{}
+	// Read loop
 	for {
+		msg := Message{}
 		if err = t.Decoder.Decode(conn, &msg); err != nil {
 
 			fmt.Printf("TCP Decoding Error : %s\n", err)
@@ -139,10 +139,16 @@ func (t *TCPTransporter) handleConn(conn net.Conn, outbound bool) {
 		}
 
 		msg.From = conn.RemoteAddr()
-		peer.wg.Add(1)
-		fmt.Printf("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
+
+		// If the message is a stream wait until it's received on the by the other pear
+		if msg.Stream {
+			peer.wg.Add(1)
+			fmt.Printf("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
+			peer.wg.Wait()
+			fmt.Printf("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
+			continue
+		}
+
 		t.msgChan <- msg
-		peer.wg.Wait()
-		fmt.Printf("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
 	}
 }

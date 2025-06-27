@@ -1,7 +1,6 @@
 package store
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
@@ -58,18 +57,8 @@ func (s *Store) Write(key string, r io.Reader) (int64, error) {
 	return s.writeStream(key, r)
 }
 
-func (s *Store) Read(key string) ([]byte, error) {
-	f, err := s.readStream(key)
-	if err != nil {
-		return nil, err
-	}
-
-	defer f.Close()
-
-	buf := new(bytes.Buffer)
-	_, err = io.Copy(buf, f)
-
-	return buf.Bytes(), err
+func (s *Store) Read(key string) (io.Reader, error) {
+	return s.readStream(key)
 }
 
 func (s *Store) Delete(key string) error {

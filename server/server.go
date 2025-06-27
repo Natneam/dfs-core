@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"sync"
+	"time"
 
 	"natneam.github.io/dfs-core/network"
 	"natneam.github.io/dfs-core/store"
@@ -25,13 +26,13 @@ type FileServer struct {
 	peerLock sync.Mutex
 	peers    map[string]network.Peer
 
-	Store    *store.Store
+	store    *store.Store
 	quitchan chan struct{}
 }
 
 func NewFileServer(opts FileServerOpts) *FileServer {
-	gob.Register(&GetMessagePayload{})
-	gob.Register(&StoreMessagePayload{})
+	gob.Register(network.GetMessagePayload{})
+	gob.Register(network.StoreMessagePayload{})
 
 	storeOpts := store.StoreOpts{
 		Root:              opts.StorageRoot,
@@ -40,7 +41,7 @@ func NewFileServer(opts FileServerOpts) *FileServer {
 	return &FileServer{
 		FileServerOpts: opts,
 		peers:          make(map[string]network.Peer),
-		Store:          store.NewStore(storeOpts),
+		store:          store.NewStore(storeOpts),
 		quitchan:       make(chan struct{}),
 	}
 }
@@ -63,38 +64,36 @@ func (s *FileServer) Stop() {
 	close(s.quitchan)
 }
 
-func (s *FileServer) StoreData(key string, r io.Reader) error {
+func (s *FileServer) Store(key string, r io.Reader) error {
 	fileBuf := new(bytes.Buffer)
 	tee := io.TeeReader(r, fileBuf)
 
-	n, err := s.Store.Write(key, tee)
-
+	n, err := s.store.Write(key, tee)
 	if err != nil {
 		return err
 	}
 
 	// Send the Store message with size and key
-	msg := DataMessage{
-		Payload: StoreMessagePayload{
+	msg := network.DataMessage{
+		Payload: network.StoreMessagePayload{
 			Key:  key,
 			Size: n,
 		},
 	}
 
-	msgBuf := new(bytes.Buffer)
-	if err := gob.NewEncoder(msgBuf).Encode(msg); err != nil {
+	if err := s.broadcast(msg); err != nil {
 		return err
 	}
 
-	peers := []io.Writer{}
+	time.Sleep(time.Millisecond * 5)
 
+	peers := []io.Writer{}
 	for _, peer := range s.peers {
-		peer.Send(msgBuf.Bytes())
 		peers = append(peers, peer)
 	}
 
 	mw := io.MultiWriter(peers...)
-
+	mw.Write([]byte{network.IncomingStream})
 	if _, err = io.Copy(mw, fileBuf); err != nil {
 		return fmt.Errorf("failed to send file content to peers: %w", err)
 	}
@@ -112,6 +111,31 @@ func (s *FileServer) OnPeer(p network.Peer) error {
 	return nil
 }
 
+func (s *FileServer) broadcast(msg network.DataMessage) error {
+	msgBuf := new(bytes.Buffer)
+	if err := gob.NewEncoder(msgBuf).Encode(msg); err != nil {
+		return err
+	}
+
+	peers := []io.Writer{}
+
+	for _, peer := range s.peers {
+		peers = append(peers, peer)
+	}
+
+	mw := io.MultiWriter(peers...)
+
+	if _, err := io.Copy(mw, bytes.NewReader([]byte{network.IncomingMessage})); err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(mw, bytes.NewReader(msgBuf.Bytes())); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *FileServer) loop() {
 	defer func() {
 		fmt.Printf("File Server Stopped Due to User Quit Action.\n")
@@ -121,34 +145,47 @@ func (s *FileServer) loop() {
 	for {
 		select {
 		case rpc := <-s.Transporter.Consume():
-			var msg DataMessage
+			var msg network.DataMessage
 			if err := gob.NewDecoder(bytes.NewReader(rpc.Payload)).Decode(&msg); err != nil {
 				log.Fatal(err)
 			}
-			s.handleMessage(rpc.From.String(), &msg)
+
+			if err := s.handleMessage(rpc.From.String(), &msg); err != nil {
+				log.Println("Handle message error: ", err)
+			}
+
 		case <-s.quitchan:
 			return
 		}
 	}
 }
 
-func (s *FileServer) handleMessage(from string, msg *DataMessage) error {
+func (s *FileServer) handleMessage(from string, msg *network.DataMessage) error {
 	switch v := msg.Payload.(type) {
-	case *StoreMessagePayload:
-		fmt.Printf("Store message received %+v\n", v)
-
-		peer, ok := s.peers[from]
-		if !ok {
-			return fmt.Errorf("peer (%s) could not be found in the peer list", from)
-		}
-
-		_, err := s.Store.Write(v.Key, io.LimitReader(peer, v.Size))
-		if err != nil {
-			return err
-		}
-		peer.CloseStream()
-		fmt.Printf("Data received and stored to disk %+v\n", v)
+	case network.StoreMessagePayload:
+		return s.handleMessageStore(from, v)
+	case network.GetMessagePayload:
+		fmt.Printf("Get message received %+v\n", v)
 	}
+	return nil
+}
+
+func (s *FileServer) handleMessageStore(from string, msg network.StoreMessagePayload) error {
+	fmt.Printf("Store message received %+v\n", msg)
+
+	peer, ok := s.peers[from]
+	if !ok {
+		return fmt.Errorf("peer (%s) could not be found in the peer list", from)
+	}
+
+	_, err := s.store.Write(msg.Key, io.LimitReader(peer, msg.Size))
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Data received and stored to disk %+v\n", msg)
+	peer.CloseStream()
+
 	return nil
 }
 
@@ -171,17 +208,4 @@ func (s *FileServer) bootstrapNetwork() error {
 	}
 	wg.Wait()
 	return nil
-}
-
-type StoreMessagePayload struct {
-	Key  string
-	Size int64
-}
-
-type GetMessagePayload struct {
-	Key string
-}
-
-type DataMessage struct {
-	Payload any
 }
