@@ -3,8 +3,8 @@ package network
 import "net"
 
 const (
-	IncomingMessage = 0x0
-	IncomingStream  = 0x1
+	IncomingMessage = 0x1
+	IncomingStream  = 0x2
 )
 
 type Message struct {

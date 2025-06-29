@@ -35,24 +35,25 @@ func makeFileServer(addr string, nodes ...string) *server.FileServer {
 
 func main() {
 	s1 := makeFileServer(":10000")
-	s2 := makeFileServer(":11000", ":10000")
+	s2 := makeFileServer(":11000")
+	s3 := makeFileServer(":12000", ":11000", ":10000")
 
-	go func() {
-		log.Fatal(s1.Start())
-	}()
+	go func() { log.Fatal(s1.Start()) }()
+	time.Sleep(500 * time.Millisecond)
+	go func() { log.Fatal(s2.Start()) }()
 
-	time.Sleep(time.Second * 2)
-	go s2.Start()
-	time.Sleep(time.Second * 2)
+	time.Sleep(2 * time.Second)
+	go func() { log.Fatal(s3.Start()) }()
+	time.Sleep(2 * time.Second)
 
 	// for i := range 10 {
 	// 	data, _ := os.Open("./main.go")
-	// 	s2.Store(fmt.Sprintf("%s_%d", "mykey", i), data)
+	// 	s3.Store(fmt.Sprintf("%s_%d", "mykey", i), data)
 	// 	data.Close()
 	// 	time.Sleep(time.Microsecond * 100)
 	// }
 
-	_, r, err := s2.Get("mykey_0")
+	_, r, err := s3.Get("mykey_0")
 	if err != nil {
 		fmt.Printf("data not found : %+v\n", err)
 	}

@@ -72,7 +72,7 @@ func (s *FileServer) Get(key string) (int64, io.Reader, error) {
 		return s.store.Read(key)
 	}
 
-	println("File not found locally searching it on the network!")
+	fmt.Printf("[%s] File not found locally searching it on the network!\n", s.Transporter.RemoteAddr())
 	msg := network.DataMessage{
 		Payload: network.GetMessagePayload{
 			Key: key,
@@ -87,15 +87,22 @@ func (s *FileServer) Get(key string) (int64, io.Reader, error) {
 
 	for _, peer := range s.peers {
 		var fileSize int64
-		binary.Read(peer, binary.LittleEndian, &fileSize)
-		n, err := s.store.Write(key, io.LimitReader(peer, fileSize))
-		if err != nil {
-			return 0, nil, err
+		if err := binary.Read(peer, binary.LittleEndian, &fileSize); err != nil {
+			// if error happens try fetching the data from other peers
+			continue
 		}
-		fmt.Printf("received (%d) data over the network from %s\n", n, peer.LocalAddr())
+
+		n, err := s.store.Write(key, io.LimitReader(peer, fileSize))
+		if err != nil { // if error try finding it from other peers
+			continue
+		}
+
+		fmt.Printf("[%s] Received (%d) data over the network from %s\n", s.Transporter.RemoteAddr(), n, peer.LocalAddr())
 		peer.CloseStream()
+		return s.store.Read(key)
 	}
-	return s.store.Read(key)
+
+	return 0, nil, fmt.Errorf("couldn't find file in any of the peers")
 }
 func (s *FileServer) Store(key string, r io.Reader) error {
 	fileBuf := new(bytes.Buffer)
@@ -171,7 +178,7 @@ func (s *FileServer) broadcast(msg network.DataMessage) error {
 
 func (s *FileServer) loop() {
 	defer func() {
-		fmt.Printf("File Server Stopped Due to User Quit Action.\n")
+		fmt.Printf("[%s] File Server Stopped Due to Error or User Quit Action.\n", s.Transporter.RemoteAddr())
 		s.Transporter.Close()
 	}()
 
@@ -184,7 +191,7 @@ func (s *FileServer) loop() {
 			}
 
 			if err := s.handleMessage(rpc.From.String(), &msg); err != nil {
-				log.Println("Handle message error: ", err)
+				log.Printf("[%s] Handle message error: %s\n", s.Transporter.RemoteAddr(), err)
 			}
 
 		case <-s.quitchan:
@@ -204,7 +211,6 @@ func (s *FileServer) handleMessage(from string, msg *network.DataMessage) error 
 }
 
 func (s *FileServer) handleMessageStore(from string, msg network.StoreMessagePayload) error {
-	fmt.Printf("Store message received %+v\n", msg)
 
 	peer, ok := s.peers[from]
 	if !ok {
@@ -216,7 +222,7 @@ func (s *FileServer) handleMessageStore(from string, msg network.StoreMessagePay
 		return err
 	}
 
-	fmt.Printf("Data received and stored to disk %+v\n", msg)
+	fmt.Printf("[%s] Data received and stored to disk %+v\n", s.Transporter.RemoteAddr(), msg)
 	peer.CloseStream()
 
 	return nil
@@ -224,7 +230,7 @@ func (s *FileServer) handleMessageStore(from string, msg network.StoreMessagePay
 
 func (s *FileServer) handleMessageGet(from string, msg network.GetMessagePayload) error {
 	if !s.store.Has(msg.Key) {
-		return errors.New("requsted to stream file but I don't have it")
+		return errors.New("requested to stream file but it doesn't exist")
 	}
 
 	peer, ok := s.peers[from]
@@ -238,7 +244,6 @@ func (s *FileServer) handleMessageGet(from string, msg network.GetMessagePayload
 	}
 
 	if rc, ok := file.(io.ReadCloser); ok {
-		println("closing read closer")
 		defer rc.Close()
 	}
 
@@ -248,7 +253,7 @@ func (s *FileServer) handleMessageGet(from string, msg network.GetMessagePayload
 		return err
 	}
 
-	println("wrote data to peer")
+	fmt.Printf("[%s] Wrote (%d) data to peer\n", s.Transporter.RemoteAddr(), fileSize)
 	return nil
 }
 

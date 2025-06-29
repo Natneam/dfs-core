@@ -68,6 +68,10 @@ func (t *TCPTransporter) Dial(addr string) error {
 	return nil
 }
 
+func (t *TCPTransporter) RemoteAddr() string {
+	return t.ListenAddress
+}
+
 // Consume returns read only channel which will be used to read
 // messages from another peer node.
 func (t *TCPTransporter) Consume() <-chan Message {

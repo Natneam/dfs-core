@@ -19,4 +19,5 @@ type Transporter interface {
 	Consume() <-chan Message
 	Close() error
 	Dial(string) error
+	RemoteAddr() string
 }
