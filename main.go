@@ -38,7 +38,7 @@ func makeFileServer(addr string, nodes ...string) *server.FileServer {
 
 func main() {
 	s1 := makeFileServer(":10000")
-	s2 := makeFileServer(":11000")
+	s2 := makeFileServer(":11000", ":10000")
 	s3 := makeFileServer(":12000", ":11000", ":10000")
 
 	go func() { log.Fatal(s1.Start()) }()

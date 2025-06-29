@@ -77,7 +77,7 @@ func (s *FileServer) Get(key string) (int64, io.Reader, error) {
 	fmt.Printf("[%s] File not found locally searching it on the network!\n", s.Transporter.RemoteAddr())
 	msg := network.DataMessage{
 		Payload: network.GetMessagePayload{
-			Key: key,
+			Key: cipher.HashKey(key),
 		},
 	}
 
@@ -118,7 +118,7 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 	// Send the Store message with size and key
 	msg := network.DataMessage{
 		Payload: network.StoreMessagePayload{
-			Key:  key,
+			Key:  cipher.HashKey(key),
 			Size: n + 16, // Because of the 16 byte of IV prepended to the stream
 		},
 	}
