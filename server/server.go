@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"natneam.github.io/dfs-core/cipher"
 	"natneam.github.io/dfs-core/network"
 	"natneam.github.io/dfs-core/store"
 )
@@ -20,6 +21,7 @@ type FileServerOpts struct {
 	Transporter       network.Transporter
 	PathTransformFunc store.PathTransformFunc
 	BootstrapNodes    []string
+	EncKey            []byte
 }
 
 type FileServer struct {
@@ -92,7 +94,7 @@ func (s *FileServer) Get(key string) (int64, io.Reader, error) {
 			continue
 		}
 
-		n, err := s.store.Write(key, io.LimitReader(peer, fileSize))
+		n, err := s.store.WriteDecrypt(key, s.EncKey, io.LimitReader(peer, fileSize))
 		if err != nil { // if error try finding it from other peers
 			continue
 		}
@@ -117,7 +119,7 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 	msg := network.DataMessage{
 		Payload: network.StoreMessagePayload{
 			Key:  key,
-			Size: n,
+			Size: n + 16, // Because of the 16 byte of IV prepended to the stream
 		},
 	}
 
@@ -134,11 +136,21 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 
 	mw := io.MultiWriter(peers...)
 	mw.Write([]byte{network.IncomingStream})
-	if _, err = io.Copy(mw, fileBuf); err != nil {
-		return fmt.Errorf("failed to send file content to peers: %w", err)
+	if _, err = cipher.CopyEncrypt(s.EncKey, fileBuf, mw); err != nil {
+		return fmt.Errorf("failed to send file content to peers: %s", err)
 	}
 
 	return nil
+}
+
+// Delete method deletes file on the local server
+func (s *FileServer) Delete(key string) error {
+	if s.store.Has(key) {
+		println("serving from local file")
+		return s.store.Delete(key)
+	}
+
+	return fmt.Errorf("file not found")
 }
 
 func (s *FileServer) OnPeer(p network.Peer) error {

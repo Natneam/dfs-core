@@ -9,6 +9,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	"natneam.github.io/dfs-core/cipher"
 )
 
 // Root is a root directory which will be used to store files in.
@@ -53,6 +55,10 @@ func NewStore(opts StoreOpts) *Store {
 	return &Store{StoreOpts: opts}
 }
 
+func (s *Store) WriteDecrypt(key string, encryptionKey []byte, r io.Reader) (int64, error) {
+	return s.writeDecryptStream(key, encryptionKey, r)
+}
+
 func (s *Store) Write(key string, r io.Reader) (int64, error) {
 	return s.writeStream(key, r)
 }
@@ -81,6 +87,31 @@ func (s *Store) Has(key string) bool {
 
 func (s *Store) Clear() error {
 	return os.RemoveAll(s.Root)
+}
+
+func (s *Store) writeDecryptStream(key string, encryptionKey []byte, r io.Reader) (int64, error) {
+	pathName := s.PathTransformFunc(key)
+	pathNameWithRoot := fmt.Sprintf("%s/%s", s.Root, pathName.PathName)
+	if err := os.MkdirAll(pathNameWithRoot, os.ModePerm); err != nil {
+		return 0, err
+	}
+
+	fullPathWithRoot := fmt.Sprintf("%s/%s", s.Root, pathName.FullPath())
+
+	f, err := os.Create(fullPathWithRoot)
+
+	if err != nil {
+		return 0, err
+	}
+
+	n, err := cipher.CopyDecrypt(encryptionKey, r, f)
+	if err != nil {
+		return 0, err
+	}
+
+	log.Printf("Writing Data %d to %s", n, fullPathWithRoot)
+
+	return n, nil
 }
 
 func (s *Store) writeStream(key string, r io.Reader) (int64, error) {

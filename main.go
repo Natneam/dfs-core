@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"time"
 
+	"natneam.github.io/dfs-core/cipher"
 	"natneam.github.io/dfs-core/network"
 	"natneam.github.io/dfs-core/server"
 	"natneam.github.io/dfs-core/store"
@@ -25,6 +27,7 @@ func makeFileServer(addr string, nodes ...string) *server.FileServer {
 		PathTransformFunc: store.HashPathTransformFunc,
 		Transporter:       tcpTransporter,
 		BootstrapNodes:    nodes,
+		EncKey:            cipher.NewEncryptionKey(),
 	}
 
 	s := server.NewFileServer(fileServerOpts)
@@ -46,17 +49,22 @@ func main() {
 	go func() { log.Fatal(s3.Start()) }()
 	time.Sleep(2 * time.Second)
 
-	// for i := range 10 {
-	// 	data, _ := os.Open("./main.go")
-	// 	s3.Store(fmt.Sprintf("%s_%d", "mykey", i), data)
-	// 	data.Close()
-	// 	time.Sleep(time.Microsecond * 100)
-	// }
+	for i := range 10 {
+		fileName := fmt.Sprintf("mykey_%d", i)
+		data, _ := os.Open("./main.go")
+		s3.Store(fileName, data)
+		data.Close()
+		time.Sleep(time.Second * 1)
 
-	_, r, err := s3.Get("mykey_0")
-	if err != nil {
-		fmt.Printf("data not found : %+v\n", err)
+		// Delete the local file
+		s3.Delete(fileName)
+
+		_, r, err := s3.Get(fileName)
+		if err != nil {
+			fmt.Printf("data not found : %+v\n", err)
+		}
+		b, _ := io.ReadAll(r)
+		println(string(b))
 	}
-	b, _ := io.ReadAll(r)
-	println(string(b))
+	select {}
 }
