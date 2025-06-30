@@ -3,6 +3,7 @@ package network
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -137,6 +138,11 @@ func (t *TCPTransporter) handleConn(conn net.Conn, outbound bool) {
 	for {
 		msg := Message{}
 		if err = t.Decoder.Decode(conn, &msg); err != nil {
+			if err == io.EOF {
+				fmt.Printf("Connection closed by peer %s\n", conn.RemoteAddr())
+				conn.Close()
+				return
+			}
 
 			fmt.Printf("TCP Decoding Error : %s\n", err)
 			continue

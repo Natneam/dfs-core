@@ -146,7 +146,6 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 // Delete method deletes file on the local server
 func (s *FileServer) Delete(key string) error {
 	if s.store.Has(key) {
-		println("serving from local file")
 		return s.store.Delete(key)
 	}
 
