@@ -1,4 +1,4 @@
-# Distributed File System (dfs-core)
+# Distributed File System
 
 This project is a simple implementation of a distributed file storage system in Go. It creates a peer-to-peer network where files can be stored, retrieved, and deleted. The system is designed to be fault-tolerant and scalable, with data encrypted both in transit and at rest.
 
