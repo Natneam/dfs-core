@@ -83,6 +83,18 @@ The application provides an interactive command-line interface to store, retriev
 
 Once a node is running, you can use the following commands:
 
+- **Connect to a node:**
+  ```
+  > connect <node_address>
+  ```
+  This command connects the current node to another node in the network. The address should be in the format `host:port`.
+
+- **List connected nodes:**
+  ```
+  > peers
+  ```
+  This command lists all nodes currently connected to the network.
+
 - **Store a file:**
   ```
   > put <local_file_path> <remote_filename>

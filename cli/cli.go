@@ -40,9 +40,9 @@ func InteractiveCli(s *server.FileServer) {
 		cmd, args := parts[0], parts[1:]
 
 		switch cmd {
-		case "add_peers":
+		case "connect":
 			handleAddNodeCommand(s, args)
-		case "list_peers":
+		case "peers":
 			handleListPeersCommand(s)
 		case "put":
 			handlePutCommand(s, args)
@@ -55,8 +55,8 @@ func InteractiveCli(s *server.FileServer) {
 			fmt.Println(s.Transporter.RemoteAddr())
 		case "help":
 			fmt.Println("Available commands:")
-			fmt.Println("  add_peers <url1> <url2>        - Add a peer to the network")
-			fmt.Println("  list_peers                     - List all connected peers")
+			fmt.Println("  connect <url1> <url2>          - Add a peer to the network")
+			fmt.Println("  peers                          - List all connected peers")
 			fmt.Println("  put <local_file> <remote_file> - Store a file on the network")
 			fmt.Println("  get <remote_file>              - Retrieve a file from the network")
 			fmt.Println("  delete <remote_file>           - Delete a file from the network")
@@ -73,7 +73,7 @@ func InteractiveCli(s *server.FileServer) {
 
 func handleAddNodeCommand(s *server.FileServer, args []string) {
 	if len(args) == 0 {
-		fmt.Println("Usage: add_peer <url1> <url2> ...")
+		fmt.Println("Usage: connect <url1> <url2> ...")
 		return
 	}
 
@@ -92,7 +92,7 @@ func handleListPeersCommand(s *server.FileServer) {
 
 	fmt.Println("Connected peers:")
 	fmt.Println("-------------------------------------------------")
-	fmt.Printf("%-20s %-20s\n", "Node URL", "Status")
+	fmt.Printf("%-20s %-20s\n", "Peer URL", "Status")
 	fmt.Println("-------------------------------------------------")
 	for _, node := range s.BootstrapNodes {
 		status := "Connected"
