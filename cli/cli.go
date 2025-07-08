@@ -40,6 +40,10 @@ func InteractiveCli(s *server.FileServer) {
 		cmd, args := parts[0], parts[1:]
 
 		switch cmd {
+		case "add_peers":
+			handleAddNodeCommand(s, args)
+		case "list_peers":
+			handleListPeersCommand(s)
 		case "put":
 			handlePutCommand(s, args)
 		case "get":
@@ -49,11 +53,50 @@ func InteractiveCli(s *server.FileServer) {
 		case "clear":
 			fmt.Print("\033[H\033[2J")
 			fmt.Println(s.Transporter.RemoteAddr())
+		case "help":
+			fmt.Println("Available commands:")
+			fmt.Println("  add_peers <url1> <url2>        - Add a peer to the network")
+			fmt.Println("  list_peers                     - List all connected peers")
+			fmt.Println("  put <local_file> <remote_file> - Store a file on the network")
+			fmt.Println("  get <remote_file>              - Retrieve a file from the network")
+			fmt.Println("  delete <remote_file>           - Delete a file from the network")
+			fmt.Println("  clear                          - Clear the console")
+			fmt.Println("  help                           - Show this help message")
+			fmt.Println("  exit                           - Exit the CLI")
 		case "exit":
 			os.Exit(0)
 		default:
 			fmt.Println("Unknown command:", cmd)
 		}
+	}
+}
+
+func handleAddNodeCommand(s *server.FileServer, args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: add_peer <url1> <url2> ...")
+		return
+	}
+
+	for _, node := range args {
+		if err := s.BootstrapNode(node); err != nil {
+			fmt.Printf("Error adding node: %+v\n", err)
+		}
+	}
+}
+
+func handleListPeersCommand(s *server.FileServer) {
+	if len(s.BootstrapNodes) == 0 {
+		fmt.Println("No peers connected.")
+		return
+	}
+
+	fmt.Println("Connected peers:")
+	fmt.Println("-------------------------------------------------")
+	fmt.Printf("%-20s %-20s\n", "Node URL", "Status")
+	fmt.Println("-------------------------------------------------")
+	for _, node := range s.BootstrapNodes {
+		status := "Connected"
+		fmt.Printf("%-20s %-20s\n", node, status)
 	}
 }
 

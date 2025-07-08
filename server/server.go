@@ -288,3 +288,14 @@ func (s *FileServer) bootstrapNetwork() error {
 	wg.Wait()
 	return nil
 }
+
+func (s *FileServer) BootstrapNode(url string) error {
+	fmt.Println("Attempting to connect with remote => ", url)
+	if err := s.Transporter.Dial(url); err != nil {
+		log.Printf("dial error : %s\n", err)
+		return err
+	}
+	// Add the node into list of nodes
+	s.BootstrapNodes = append(s.BootstrapNodes, url)
+	return nil
+}
